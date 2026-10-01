@@ -13,8 +13,8 @@ build/
 venv/
 env/
 
-# Streamlit secrets (contains sensitive credentials - NEVER commit this)
-.streamlit/secrets.toml
+# Streamlit folder (hide from GitHub)
+.streamlit/
 
 # Environment variables
 .env
