@@ -3,7 +3,6 @@
 import dlib
 import numpy as np
 import face_recognition_models
-from sklearn.svm import SVC
 import streamlit as st
 
 from src.database.db import get_all_students
@@ -57,14 +56,7 @@ def get_trained_model():
     if len(X) ==0:
         return 0
     
-    clf = SVC(kernel='linear', probability=True, class_weight='balanced')
-
-    try:
-        clf.fit(X, y)
-    except ValueError:
-        pass
-
-    return {'clf': clf, 'X':X, "y":y}
+    return {'X': X, 'y': y}
 
 
 def train_classifier():
@@ -72,7 +64,7 @@ def train_classifier():
     model_data = get_trained_model()
     return bool(model_data)
 
-def predict_attendance(class_image_np):
+def predict_attendance(class_image_np, candidate_student_ids=None):
     encodings = get_face_embeddings(class_image_np)
 
     detected_student = {}
@@ -83,25 +75,27 @@ def predict_attendance(class_image_np):
     if not model_data:
         return detected_student, [], len(encodings)
     
-    clf = model_data['clf']
     X_train = model_data['X']
     y_train = model_data['y']
 
-    all_students = sorted(list(set(y_train)))
+    candidate_indices = [
+        index for index, student_id in enumerate(y_train)
+        if candidate_student_ids is None or int(student_id) in candidate_student_ids
+    ]
+    all_students = sorted({int(y_train[index]) for index in candidate_indices})
 
     for encoding in encodings:
-        if len(all_students)>= 2:
-            predicted_id= int(clf.predict([encoding])[0])
-        else:
-            predicted_id = int(all_students[0])
+        if not candidate_indices:
+            continue
 
-        student_embedding = X_train[y_train.index(predicted_id)]
+        distances = [
+            np.linalg.norm(X_train[index] - encoding)
+            for index in candidate_indices
+        ]
+        best_index = int(np.argmin(distances))
+        best_match_score = distances[best_index]
+        predicted_id = int(y_train[candidate_indices[best_index]])
 
-        best_match_score = np.linalg.norm(student_embedding - encoding)
-
-        resemblance_threshold = 0.6
-
-        if best_match_score <= resemblance_threshold:
+        if best_match_score <= 0.6:
             detected_student[predicted_id] = True
     return detected_student, all_students, len(encodings)
-
